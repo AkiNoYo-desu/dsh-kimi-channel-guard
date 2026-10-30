@@ -1,0 +1,56 @@
+{
+  "name": "dsh-kimi-channel-guard",
+  "version": "1.0.0",
+  "description": "DSH Kimi channel compatibility patch: isolates streaming reasoning, answer and tool-call block indices and keeps assistant reasoning out of answer history.",
+  "type": "module",
+  "license": "MIT",
+  "author": "AkiNoYo-desu",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-kimi-channel-guard": "./bin/cli.js"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "test",
+    "docs",
+    "assets",
+    "README.md",
+    "LICENSE",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AkiNoYo-desu/dsh-kimi-channel-guard.git"
+  },
+  "homepage": "https://github.com/AkiNoYo-desu/dsh-kimi-channel-guard",
+  "bugs": {
+    "url": "https://github.com/AkiNoYo-desu/dsh-kimi-channel-guard/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "kimi",
+    "reasoning",
+    "streaming",
+    "compatibility"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

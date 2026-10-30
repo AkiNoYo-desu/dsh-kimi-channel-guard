@@ -1,0 +1,59 @@
+export async function* openaiChatStream(body) {
+  let next = 0
+  let textBlock = null
+  const tools = new Map()
+  let finish = { kind: 'stop' }
+  let sawTerminal = false
+  for await (const data of iterateSse(body)) {
+    if (data === '[DONE]') {
+      sawTerminal = true
+      break
+    }
+    const json = jsonSse(data)
+    if (!json) continue
+    const choice = (json.choices && json.choices[0]) || {}
+    const delta = choice.delta || json.delta || {}
+    if (typeof delta.content === 'string' && delta.content) {
+      if (!textBlock) {
+        textBlock = openBlock('text', next++)
+        yield { type: 'block-start', index: textBlock.index, blockType: 'text' }
+      }
+      yield { type: 'text-delta', index: textBlock.index, text: delta.content }
+    }
+    if (typeof delta.reasoning_content === 'string' && delta.reasoning_content) {
+      yield { type: 'reasoning-delta', index: 0, text: delta.reasoning_content }
+    }
+    for (const call of delta.tool_calls || []) {
+      let block = tools.get(call.index)
+      if (!block) {
+        block = openBlock('tool-call', next++)
+        tools.set(call.index, block)
+        yield { type: 'block-start', index: block.index, blockType: 'tool-call' }
+      }
+      if (call.id) block.id = call.id
+      if (call.function && call.function.name) block.name = call.function.name
+      const fragment = (call.function && call.function.arguments) || ''
+      yield {
+        type: 'tool-call-delta',
+        index: block.index,
+        id: String(block.id || `call_${block.index}`),
+        ...(block.name ? { name: block.name } : {}),
+        argumentsDelta: fragment,
+      }
+    }
+    if (json.usage) yield { type: 'usage', usage: json.usage }
+    if (choice.finish_reason) {
+      sawTerminal = true
+      if (choice.finish_reason === 'length') finish = { kind: 'max-tokens' }
+      else if (choice.finish_reason === 'tool_calls' || choice.finish_reason === 'function_call') finish = { kind: 'tool-calls' }
+      else if (choice.finish_reason === 'content_filter') finish = { kind: 'error', failure: { code: 'CONTENT_FILTER', message: 'content filter triggered' } }
+      else if (choice.finish_reason === 'stop') finish = { kind: 'stop' }
+    }
+  }
+  if (!sawTerminal && (textBlock !== null || tools.size > 0)) {
+    yield { type: 'finish', reason: { kind: 'error', failure: { code: 'INCOMPLETE', message: 'stream terminated unexpectedly before finish_reason or terminal marker' } } }
+    return
+  }
+  if (finish.kind === 'stop' && tools.size > 0) finish = { kind: 'tool-calls' }
+  yield { type: 'finish', reason: finish }
+}

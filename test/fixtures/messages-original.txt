@@ -1,0 +1,67 @@
+export function openaiMessages(options) {
+  const out = []
+  if (options.system) out.push({ role: 'system', content: options.system })
+  for (const message of options.messages || []) {
+    if (message.role === 'system') {
+      out.push({ role: 'system', content: flattenText(message.content) })
+      continue
+    }
+    if (message.role === 'assistant') {
+      const calls = [
+        ...toolCalls(message.content).map((block) => ({
+          id: block.id,
+          type: 'function',
+          function: { name: block.name, arguments: block.arguments || '{}' },
+        })),
+        ...((message.tool_calls || message.toolCalls || []).map((c) => ({
+          id: callIdOf(c),
+          type: 'function',
+          function: {
+            name: c.name || (c.function && c.function.name),
+            arguments: typeof c.arguments === 'string' ? c.arguments : (c.function && c.function.arguments) || '{}',
+          },
+        }))),
+      ]
+      out.push({
+        role: 'assistant',
+        content: flattenText(message.content) || (calls.length ? null : ''),
+        ...(calls.length ? { tool_calls: calls } : {}),
+      })
+      continue
+    }
+    if (message.role === 'tool') {
+      const toolCallId = callIdOf(message)
+      const content = typeof message.content === 'string'
+        ? message.content
+        : (flattenText(message.content) || JSON.stringify(message.content || ''))
+      out.push({
+        role: 'tool',
+        tool_call_id: toolCallId,
+        content: content || '(no output)',
+      })
+      continue
+    }
+    const results = toolResults(message.content)
+    const text = flattenText(message.content)
+    const images = extractImages(message.content)
+    if (images.length) {
+      const parts = []
+      if (text) parts.push({ type: 'text', text })
+      for (const img of images) {
+        const blk = toOpenAiImage(img)
+        if (blk) parts.push(blk)
+      }
+      out.push({ role: 'user', content: parts })
+    } else if (text || !results.length) {
+      out.push({ role: 'user', content: text })
+    }
+    for (const result of results) {
+      out.push({
+        role: 'tool',
+        tool_call_id: callIdOf(result),
+        content: typeof result.content === 'string' ? result.content : (flattenText(result.content) || '(no output)'),
+      })
+    }
+  }
+  return out
+}
